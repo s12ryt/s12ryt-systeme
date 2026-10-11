@@ -141,3 +141,18 @@
 - EDIT crates/systeme-core/src/transaction.rs (doc 空行)
 - EDIT .github/workflows/ci.yml (integration job 擴充: timer/socket/journald/escape 冒煙)
 - WRITE README.md (新建)
+
+## 2026-10-11 輪次 25 寫入記錄
+- EDIT Cargo.toml: tokio features += "sync"
+- EDIT crates/systeme-core/Cargo.toml: += [target.'cfg(unix)'.dependencies] libc
+- EDIT crates/systeme-manager/src/sockets.rs: setenv 值 format! 字串
+- EDIT crates/systeme-manager/src/bin/systemd.rs: set_subreaper() 無參; irrefutable if let → let
+- EDIT crates/systeme-network/src/bin/systemd-networkd.rs: match_network 簽名修正 + exec_argv 內 Command import
+- EDIT crates/systeme-udev/src/bin/systemd-udevd.rs: 刪 unix-only unused import
+- EDIT crates/systeme-journal/src/bin/journald.rs: 刪 unused import
+- EDIT tests/sockets.rs: SocketAddrExt import + from_abstract_name().expect + read timeout 500ms
+- EDIT tests/daemon_units.rs: ServiceExecutor import cfg 門控 + mount_roundtrip_unix mount_permitted 探測
+- EDIT tests/mounts.rs: mount_permitted() helper EPERM 跳過
+- EDIT tests/executor.rs: prepare_socket_fds_roundtrip 用真 File fd (holder 防提前 drop)
+- git: 5 commits 推送 (build-essential / unix-only fixes / mount skip / read timeout / real fds)
+- CI 最終: run 38122286542 三 job 全綠 (test-windows/test-linux/integration)

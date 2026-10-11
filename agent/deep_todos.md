@@ -279,3 +279,18 @@
 - CI integration job 擴充: +greet.timer (OnBootSec=1s 過期立即觸發) / greet.service / app.socket (ListenStream=/tmp/xdg/app.sock) / app.service 單元; 冒煙段: start timer→sleep 3→is-active greet.service; start app.socket→test -S→is-active app.service→stop; journald bin 啟動+kill -0+test -S dev-log+TERM; systemd-escape --suffix=mount /sys/fs/cgroup = sys-fs-cgroup.mount; cp 改全文件
 - README.md 新建: 項目簡介/PID≠1 設計/雙模式表/高兼容說明/crates 表/功能矩陣/快速開始/環境變量/測試與 CI 三 job/與 systemd 差異簡化項
 - 驗證: cargo clippy --workspace --all-targets 零警告 (exit 0); cargo test --workspace 607 全綠 0 failed; cargo build --workspace --all-targets 零警告 (exit 0)
+
+## 輪次 25 (2026-10-11): GitHub 公開倉庫 + CI 修復循環 — 三 job 全綠
+
+- 用戶授權建公開倉庫: github.com/s12ryt/s12ryt-systeme (gh repo create --private → edit --visibility public)
+- git init -b main, 121 文件首提交; CI run #1 test-linux 失敗 (容器缺 cc) → ci.yml 加 build-essential
+- run #2 失敗: unix-only unused import (udevd/journald bin) — Windows 編不到的警告被 RUSTFLAGS=-D warnings 殺
+- 本地武器: rustup target add x86_64-unknown-linux-gnu + cargo check --target 抓全部 Linux-only 問題 (不需鏈接器)
+- cross-check 修復: tokio 加 sync feature; systeme-core 補 [target.'cfg(unix)'.dependencies] libc; sockets.rs setenv 參數 format!; networkd bin match_network 簽名/Command import; set_subreaper() 無參; irrefutable if let 改 let; ServiceExecutor 測試 import cfg 門控; SocketAddrExt::from_abstract_name + expect
+- run #3: mount_roundtrip_unix EPERM (CI 容器無 CAP_SYS_ADMIN) → mounts/daemon_units 加 mount_permitted() 探測跳過
+- run #4: Test step 掛起 10 分鐘 → 取消; 根因 sockets.rs accept_stream_data_roundtrip 的 read 無超時 (listener 未 accept 時 unix read 永久阻塞; cargo test fail-fast 使 run #3 沒跑過此測試) → set_read_timeout(500ms)
+- run #5: executor prepare_socket_fds_roundtrip 用假 fd [3,4] 注入 dup2 → EBADF → 改真 File fd (holder 保持活著避免 drop 關閉)
+- **run #6 (38122286542): test-windows ✅ test-linux ✅ integration ✅ 全綠!**
+- integration 真實輸出: "systemd: loaded 6 units (0 masked, 0 dropped)" / hello-from-timer (OnBootSec=1s 觸發) / hello-from-hi / sleeper start→active→stop→inactive / systemctl cat | grep / app.sock socket 激活 / journald /dev/log 冒煙 / systemd-escape 輸出 sys-fs-cgroup.mount
+
+教訓: (1) unix-only 警告靠 cross-target check 提前抓; (2) CI 容器無特權 mount(2) EPERM 需能力探測跳過; (3) 測試讀 socket 必須設 read timeout; (4) cargo test 默認 fail-fast 跨 binary, 前面 binary 失敗會掩蓋後面問題; (5) dup2 注入測試需真實打開的 fd
