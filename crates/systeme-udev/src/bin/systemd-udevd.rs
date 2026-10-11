@@ -9,7 +9,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(unix)]
 mod imp {
-    use std::os::unix::net::UnixDatagram;
     use std::path::Path;
 
     use systeme_udev::{parse_uevent, scan_sysfs, UdevDb};

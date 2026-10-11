@@ -197,12 +197,12 @@ pub fn inject_fds(cmd: &mut std::process::Command, fds: &[i32]) {
                 let pid = libc::getpid().to_string();
                 libc::setenv(
                     b"LISTEN_FDS\0".as_ptr().cast(),
-                    [n.to_string(), "\0"].concat().as_ptr().cast(),
+                    format!("{n}\0").as_ptr().cast(),
                     1,
                 );
                 libc::setenv(
                     b"LISTEN_PID\0".as_ptr().cast(),
-                    [pid, "\0"].concat().as_ptr().cast(),
+                    format!("{pid}\0").as_ptr().cast(),
                     1,
                 );
             }

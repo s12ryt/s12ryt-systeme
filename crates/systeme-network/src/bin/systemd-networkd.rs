@@ -53,7 +53,6 @@ fn main() {
 
 #[cfg(unix)]
 fn run(dir: &std::path::Path, dry_run: bool) -> Result<usize, String> {
-    use std::process::Command;
     use systeme_network::{apply_steps, link_apply_argv, list_interface_names, netdev_create_argv};
     use systeme_network::{LinkConfig, NetDevConfig, NetworkConfig};
     use systeme_units::parser::parse_unit;
@@ -109,7 +108,7 @@ fn run(dir: &std::path::Path, dry_run: bool) -> Result<usize, String> {
                     match_: lc.match_.clone(),
                     ..Default::default()
                 },
-                Some(iface),
+                iface.as_str(),
                 None,
                 None,
             ) {
@@ -138,6 +137,7 @@ fn run(dir: &std::path::Path, dry_run: bool) -> Result<usize, String> {
 
 #[cfg(unix)]
 fn exec_argv(argv: &[String], dry_run: bool, applied: &mut usize) -> Result<(), String> {
+    use std::process::Command;
     println!("networkd: $ {}", argv.join(" "));
     if dry_run {
         *applied += 1;

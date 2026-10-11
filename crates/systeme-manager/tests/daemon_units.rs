@@ -6,6 +6,8 @@
 
 use systeme_core::ipc::{Request, Response};
 use systeme_core::manager::{ActiveState, ManagerCore, RuntimeMode};
+#[cfg(unix)]
+use systeme_core::manager::ServiceExecutor;
 use systeme_manager::daemon::DaemonCore;
 use systeme_manager::executor::StdCommandExecutor;
 use systeme_units::search::{MemFs, SearchPaths};

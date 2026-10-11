@@ -3,6 +3,7 @@
 #![cfg(unix)]
 
 use std::io::{Read, Write};
+use std::os::linux::net::SocketAddrExt;
 use std::os::unix::net::UnixStream;
 
 use systeme_manager::sockets::{bind_socket_unit, SocketActivation};
@@ -74,9 +75,9 @@ fn bind_abstract_socket() {
         s
     };
     use std::os::unix::net::SocketAddr;
-    let sock = std::os::unix::net::UnixStream::connect_addr(&SocketAddr::from_abstract_name(
-        b"systeme-test-abstract",
-    ))
+    let sock = std::os::unix::net::UnixStream::connect_addr(
+        &SocketAddr::from_abstract_name(b"systeme-test-abstract").expect("abstract addr"),
+    )
     .or_else(|_| {
         // 舊 API 回退: 手工 sockaddr
         let _ = addr;

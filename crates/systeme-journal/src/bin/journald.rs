@@ -27,8 +27,6 @@ fn main() -> ExitCode {
 
 #[cfg(unix)]
 fn run() -> ExitCode {
-    use std::os::unix::net::UnixDatagram;
-
     use systeme_journal::{journal_path, process_datagram, JournalStore, JsonlSink};
 
     let path = journal_path();

@@ -56,7 +56,7 @@ mod imp {
         eprintln!("systemd: running in {} mode (PID {})", mode.as_str(), std::process::id());
 
         // subreaper: 非 PID 1 也能收養孤兒 (best-effort)
-        if let Err(e) = sys::set_subreaper(true) {
+        if let Err(e) = sys::set_subreaper() {
             eprintln!("systemd: warning: PR_SET_CHILD_SUBREAPER failed ({e}), orphan reparenting to us unavailable");
         }
 
@@ -142,7 +142,8 @@ mod imp {
                     }
                 }
                 Some(ev) = rx.recv() => {
-                    if let Event::ChildExit(pid, raw_status) = ev {
+                    let Event::ChildExit(pid, raw_status) = ev;
+                    {
                         let mut guard = core.lock().await;
                         let unit = unit_of_pid(&guard, pid);
                         if let Some(name) = unit {
