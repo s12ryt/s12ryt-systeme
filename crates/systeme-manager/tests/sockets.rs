@@ -104,7 +104,9 @@ fn accept_stream_data_roundtrip() {
     let mut c = UnixStream::connect(&path).unwrap();
     c.write_all(b"hello").unwrap();
     c.shutdown(std::net::Shutdown::Write).unwrap();
-    // listener 存在即可; accept 語義由 service 進程接管 (fd 傳遞)
+    // listener 存在即可; accept 語義由 service 進程接管 (fd 傳遞)。
+    // 注意: 不能無限 read — listener 未 accept 時 Unix read 會永久阻塞。
+    c.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
     let mut buf = [0u8; 16];
     let _ = c.read(&mut buf);
 }
