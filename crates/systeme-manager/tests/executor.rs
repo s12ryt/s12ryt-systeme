@@ -74,8 +74,18 @@ fn signal_nonexistent_pid_errors() {
 fn prepare_socket_fds_roundtrip() {
     let mut ex = StdCommandExecutor::new();
     assert!(ex.pending_fds.is_empty(), "fresh executor has no pending fds");
-    ex.prepare_socket_fds(&[3, 4]);
-    assert_eq!(ex.pending_fds, vec![3, 4]);
+    // unix 下 dup2 需要真實打開的 fd; Windows 不執行注入, 假 fd 即可
+    #[cfg(unix)]
+    let holder = std::fs::File::create(std::env::temp_dir().join("systeme-exec-fd-probe")).unwrap();
+    #[cfg(unix)]
+    let fds: Vec<i32> = {
+        use std::os::fd::AsRawFd;
+        vec![holder.as_raw_fd(), holder.as_raw_fd()]
+    };
+    #[cfg(not(unix))]
+    let fds: Vec<i32> = vec![3, 4];
+    ex.prepare_socket_fds(&fds);
+    assert_eq!(ex.pending_fds.len(), fds.len());
     // spawn 一次後清空 (fd 已被消費, 不洩漏到後續 spawn)
     ex.spawn("t.service", &exit0_cmd(), &[], None).unwrap();
     assert!(ex.pending_fds.is_empty(), "fds must be consumed by spawn");
