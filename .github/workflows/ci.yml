@@ -17,10 +17,10 @@ jobs:
     container:
       image: ubuntu:24.04
     steps:
-      - name: Install deps (curl/git/procps for CI, rust toolchain)
+      - name: Install deps (curl/git/procps/build-essential for CI, rust toolchain)
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git procps
+          apt-get install -y --no-install-recommends ca-certificates curl git procps build-essential
       - uses: actions/checkout@v4
       - name: Install Rust (stable)
         run: |
@@ -43,7 +43,7 @@ jobs:
       - name: Install deps
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git procps
+          apt-get install -y --no-install-recommends ca-certificates curl git procps build-essential
       - uses: actions/checkout@v4
       - name: Install Rust (stable)
         run: |
