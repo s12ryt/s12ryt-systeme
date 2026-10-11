@@ -1,0 +1,11 @@
+[package]
+name = "systeme-units"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "systemd unit file parsing: INI-dialect parser, directory search, specifier expansion"
+
+[dependencies]
+
+[dev-dependencies]
+tempfile = "3"

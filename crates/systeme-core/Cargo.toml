@@ -1,0 +1,16 @@
+[package]
+name = "systeme-core"
+version = "0.1.0"
+edition = "2021"
+description = "s12ryt-systeme 核心: 依賴圖、事務引擎、單元運行時"
+
+[dependencies]
+systeme-units = { path = "../systeme-units" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

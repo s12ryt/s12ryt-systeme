@@ -1,0 +1,19 @@
+[package]
+name = "systemctl"
+version = "0.1.0"
+edition = "2021"
+description = "systemctl-compatible CLI for s12ryt-systeme"
+
+[dependencies]
+systeme-core = { path = "../systeme-core" }
+systeme-units = { path = "../systeme-units" }
+serde_json = { workspace = true }
+libc = { workspace = true }
+
+[lib]
+name = "systemctl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "systemctl"
+path = "src/main.rs"

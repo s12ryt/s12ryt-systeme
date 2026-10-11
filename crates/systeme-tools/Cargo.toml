@@ -1,0 +1,17 @@
+[package]
+name = "systeme-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+systeme-units = { path = "../systeme-units" }
+
+[[bin]]
+name = "systemd-escape"
+path = "src/bin/systemd-escape.rs"
+
+[[bin]]
+name = "systemd-analyze"
+path = "src/bin/systemd-analyze.rs"

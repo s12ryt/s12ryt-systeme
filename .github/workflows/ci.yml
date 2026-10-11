@@ -1,0 +1,189 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # ── 階段 1: Linux 容器內全量測試 (含全部 cfg(unix) 分支) ──
+  # ubuntu:24.04 容器中 PID 1 不是 systemd — 正是本項目的目標環境
+  test-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Install deps (curl/git/procps for CI, rust toolchain)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git procps
+      - uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Show toolchain
+        run: cargo --version && rustc --version
+      - name: Build (all targets, warnings as errors)
+        run: cargo build --workspace --all-targets
+      - name: Test (full suite incl. cfg(unix) tests)
+        run: cargo test --workspace
+
+  # ── 階段 2: 集成冒煙 — 守護進程以普通進程 (PID≠1) 啟動, systemctl 對接 ──
+  integration:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+    needs: test-linux
+    steps:
+      - name: Install deps
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git procps
+      - uses: actions/checkout@v4
+      - name: Install Rust (stable)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build release binaries
+        run: cargo build --release --workspace
+      - name: Integration smoke test (daemon PID≠1 + systemctl round-trip)
+        run: |
+          set -eu
+          export SYSTEME_SOCKET=/tmp/systeme-test/private.sock
+          export XDG_RUNTIME_DIR=/tmp/xdg
+          mkdir -p "$XDG_RUNTIME_DIR" /tmp/systeme-test/units
+          BIN="$(pwd)/target/release"
+
+          # 準備一個真實服務單元 (oneshot 型,快速退出;一個 sleep 型保持 active)
+          cat > /tmp/systeme-test/units/hi.service <<'EOF'
+          [Unit]
+          Description=CI Smoke Oneshot
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c 'echo hello-from-hi'
+          RemainAfterExit=yes
+          EOF
+          cat > /tmp/systeme-test/units/sleeper.service <<'EOF'
+          [Unit]
+          Description=CI Smoke Sleeper
+
+          [Service]
+          ExecStart=/bin/sleep 300
+          EOF
+
+          # timer 冒煙: OnBootSec=1s (boot 錨點早已過 → 追蹤時立即觸發)
+          cat > /tmp/systeme-test/units/greet.timer <<'EOF'
+          [Unit]
+          Description=CI Smoke Timer
+
+          [Timer]
+          OnBootSec=1s
+          Unit=greet.service
+          EOF
+          cat > /tmp/systeme-test/units/greet.service <<'EOF'
+          [Unit]
+          Description=CI Smoke Greet
+
+          [Service]
+          Type=oneshot
+          ExecStart=/bin/sh -c 'echo hello-from-timer'
+          RemainAfterExit=yes
+          EOF
+
+          # socket 激活冒煙
+          cat > /tmp/systeme-test/units/app.socket <<'EOF'
+          [Unit]
+          Description=CI Smoke Socket
+
+          [Socket]
+          ListenStream=/tmp/xdg/app.sock
+          EOF
+          cat > /tmp/systeme-test/units/app.service <<'EOF'
+          [Unit]
+          Description=CI Smoke Socket Service
+
+          [Service]
+          ExecStart=/bin/sleep 300
+          EOF
+
+          # 用戶模式搜索路徑: ~/.config/systemd/user
+          UNIT_DIR="$HOME/.config/systemd/user"
+          mkdir -p "$UNIT_DIR"
+          cp /tmp/systeme-test/units/* "$UNIT_DIR/"
+
+          echo "--- 啟動守護進程 (非 PID 1, 顯式 --user 模式) ---"
+          "$BIN/systemd" --user &
+          DAEMON_PID=$!
+          sleep 2
+          kill -0 "$DAEMON_PID"   # 仍存活?
+          echo "daemon alive: pid $DAEMON_PID"
+
+          echo "--- systemctl list-units ---"
+          "$BIN/systemctl" list-units
+          echo "--- systemctl start hi.service ---"
+          "$BIN/systemctl" start hi.service
+          sleep 1   # 等收割線程 (200ms 輪詢) 收 oneshot 退出 → RemainAfterExit=active
+          echo "--- systemctl is-active hi.service ---"
+          "$BIN/systemctl" is-active hi.service
+          "$BIN/systemctl" status hi.service
+
+          echo "--- systemctl start/is-active/stop sleeper.service ---"
+          "$BIN/systemctl" start sleeper.service
+          "$BIN/systemctl" is-active sleeper.service
+          "$BIN/systemctl" status sleeper.service
+          "$BIN/systemctl" stop sleeper.service
+          "$BIN/systemctl" is-active sleeper.service && rc=0 || rc=$?
+          # inactive 應返回 exit 3
+          test "$rc" -eq 3
+
+          echo "--- daemon-reload + cat ---"
+          "$BIN/systemctl" daemon-reload
+          "$BIN/systemctl" cat hi.service | grep -q 'hello-from-hi'
+
+          echo "--- timer 冒煙: start greet.timer → tick 到期 → greet.service active ---"
+          "$BIN/systemctl" start greet.timer
+          "$BIN/systemctl" is-active greet.timer
+          sleep 3   # tick 1s 輪詢 + 過期 OnBootSec 立即觸發
+          "$BIN/systemctl" is-active greet.service
+
+          echo "--- socket 激活冒煙: start app.socket → 綁定 + 目標 service 啟動 ---"
+          "$BIN/systemctl" start app.socket
+          sleep 1
+          test -S /tmp/xdg/app.sock && echo "socket file bound"
+          "$BIN/systemctl" is-active app.service
+          "$BIN/systemctl" stop app.socket
+
+          echo "--- journald bin 冒煙: 啟動 + dev-log socket 綁定 ---"
+          export SYSTEME_DEV_LOG=/tmp/xdg/dev-log
+          export SYSTEME_JOURNAL=/tmp/xdg/journal.jsonl
+          "$BIN/journald" &
+          JPID=$!
+          sleep 1
+          kill -0 "$JPID"
+          test -S /tmp/xdg/dev-log && echo "dev-log bound"
+          kill -TERM "$JPID"
+          wait "$JPID" || true
+
+          echo "--- 輔助工具冒煙 ---"
+          test "$("$BIN/systemd-escape" --suffix=mount /sys/fs/cgroup)" = "sys-fs-cgroup.mount"
+
+          echo "--- 停止守護進程 ---"
+          kill -TERM "$DAEMON_PID"
+          wait "$DAEMON_PID" || true
+          test ! -S "$SYSTEME_SOCKET" && echo "socket cleaned"
+          echo "ALL SMOKE TESTS PASSED"
+
+  # ── 階段 3: Windows 開發機兼容 (純邏輯層) ──
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test (pure-logic layers, unix-only tests are cfg-gated out)
+        run: cargo test --workspace

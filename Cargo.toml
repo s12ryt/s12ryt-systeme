@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/systeme-units",
+    "crates/systeme-core",
+    "crates/systemctl",
+    "crates/systeme-manager",
+    "crates/systeme-journal",
+    "crates/journalctl",
+    "crates/systeme-network",
+    "crates/systeme-login",
+    "crates/systeme-udev",
+    "crates/systeme-tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+libc = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "io-util"] }
+
+[profile.release]
+lto = "thin"
+strip = true
