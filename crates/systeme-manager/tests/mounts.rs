@@ -35,9 +35,34 @@ fn mount_config_options_parse() {
     assert_eq!(cfg.options, vec!["rw", "size=8M", "nodev", "nosuid"]);
 }
 
+/// 環境能力探測: 無 CAP_SYS_ADMIN (如 CI 容器) 時 mount(2) EPERM → 測試跳過。
+#[cfg(unix)]
+fn mount_permitted() -> bool {
+    let probe = tempfile::tempdir().unwrap();
+    let dir = probe.path().join("probe");
+    std::fs::create_dir_all(&dir).unwrap();
+    let what_c = std::ffi::CString::new("tmpfs").unwrap();
+    let mnt_c = std::ffi::CString::new(dir.as_os_str().as_encoded_bytes()).unwrap();
+    let type_c = std::ffi::CString::new("tmpfs").unwrap();
+    let rc = unsafe { libc::mount(what_c.as_ptr(), mnt_c.as_ptr(), type_c.as_ptr(), 0, std::ptr::null()) };
+    if rc == 0 {
+        unsafe { libc::umount(mnt_c.as_ptr()) };
+        true
+    } else {
+        eprintln!(
+            "skip: mount(2) not permitted ({}) — CI container lacks CAP_SYS_ADMIN",
+            std::io::Error::last_os_error()
+        );
+        false
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn real_mount_and_umount_tmpfs() {
+    if !mount_permitted() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let unit = parse_unit(&format!(
         "[Mount]\nWhat=none\nWhere={}\nType=tmpfs\nOptions=size=1M\n",

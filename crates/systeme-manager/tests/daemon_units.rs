@@ -183,6 +183,22 @@ fn stop_inactive_mount_is_ok() {
 #[test]
 #[cfg(unix)]
 fn mount_roundtrip_unix() {
+    // 環境能力探測: 容器/無 CAP_SYS_ADMIN 環境 mount(2) 會 EPERM, 測試跳過
+    let probe = tempfile::tempdir().unwrap();
+    let probe_mnt = probe.path().join("probe");
+    std::fs::create_dir_all(&probe_mnt).unwrap();
+    let mnt_c = std::ffi::CString::new(probe_mnt.as_os_str().as_encoded_bytes()).unwrap();
+    let what_c = std::ffi::CString::new("tmpfs").unwrap();
+    let type_c = std::ffi::CString::new("tmpfs").unwrap();
+    let rc = unsafe { libc::mount(what_c.as_ptr(), mnt_c.as_ptr(), type_c.as_ptr(), 0, std::ptr::null()) };
+    if rc != 0 {
+        let err = std::io::Error::last_os_error();
+        unsafe { libc::umount(mnt_c.as_ptr()) };
+        eprintln!("skip: mount(2) not permitted here ({err}) — CI container lacks CAP_SYS_ADMIN");
+        return;
+    }
+    unsafe { libc::umount(mnt_c.as_ptr()) };
+
     let tmp = tempfile::tempdir().unwrap();
     let mnt = tmp.path().join("mnt");
     std::fs::create_dir_all(&mnt).unwrap();
